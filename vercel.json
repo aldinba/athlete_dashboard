@@ -1,0 +1,15 @@
+# Athlete Dashboard - Vercel Deployment Configuration
+
+This file contains instructions for Vercel to deploy the application.
+
+## Build Settings
+- Framework Preset: Next.js
+- Build Command: `npm run build`
+- Output Directory: `.next`
+- Install Command: `npm install`
+
+## Environment Variables
+The following environment variables must be set in the Vercel dashboard:
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
+- OPENAI_API_KEY
