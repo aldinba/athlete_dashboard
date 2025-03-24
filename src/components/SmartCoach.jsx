@@ -1,127 +1,96 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { getCoachingAdvice } from '../services/openaiService';
+import { useState, useEffect } from 'react';
+import { AI_PROVIDERS, getCoachingAdvice } from '../services/aiProviderService';
+import './SmartCoach.css';
 
-const SmartCoach = ({ userId }) => {
-  const [advice, setAdvice] = useState(null);
+/**
+ * SmartCoach component that provides AI-powered coaching advice
+ * based on the user's training data
+ */
+const SmartCoach = ({ user, trainingData, supabaseClient }) => {
+  const [advice, setAdvice] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  
+  const [selectedProvider, setSelectedProvider] = useState(AI_PROVIDERS.GEMINI);
+
+  // Function to fetch coaching advice
   const fetchCoachingAdvice = async () => {
-    if (!userId) return;
+    setLoading(true);
+    setError(null);
     
     try {
-      setLoading(true);
-      setError(null);
-      
-      // Fetch recent workouts
-      const { data: workouts, error: workoutsError } = await supabase
-        .from('workouts')
-        .select('*')
-        .eq('user_id', userId)
-        .order('workout_date', { ascending: false })
-        .limit(10);
-      
-      if (workoutsError) throw workoutsError;
-      
-      // Fetch training load data
-      const { data: trainingLoad, error: loadError } = await supabase
-        .from('training_load')
-        .select('*')
-        .eq('user_id', userId)
-        .order('date', { ascending: false })
-        .limit(1)
-        .single();
-      
-      if (loadError && loadError.code !== 'PGRST116') throw loadError;
-      
-      // Fetch user profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
-      if (profileError) throw profileError;
-      
-      // If we have enough data, get coaching advice
-      if (workouts && workouts.length > 0) {
-        const trainingData = {
-          recentWorkouts: workouts,
-          trainingLoad: trainingLoad || {
-            atl: 0,
-            ctl: 0,
-            tsb: 0,
-            weekly_distance: 0
-          },
-          userProfile: profile || {}
-        };
-        
-        const response = await getCoachingAdvice(trainingData);
-        setAdvice(response.advice);
-        setLastUpdated(new Date());
-      } else {
-        setAdvice("Upload some workouts to get personalized coaching advice!");
-      }
+      const coachingAdvice = await getCoachingAdvice(trainingData, selectedProvider);
+      setAdvice(coachingAdvice);
     } catch (err) {
       console.error('Error fetching coaching advice:', err);
-      setError('Failed to generate coaching advice. Please try again later.');
+      setError('Failed to get coaching advice. Please try again later.');
     } finally {
       setLoading(false);
     }
   };
-  
+
+  // Fetch advice when component mounts or training data changes
   useEffect(() => {
-    fetchCoachingAdvice();
-  }, [userId]);
-  
-  const handleRefresh = () => {
-    fetchCoachingAdvice();
+    if (trainingData && Object.keys(trainingData).length > 0) {
+      fetchCoachingAdvice();
+    }
+  }, [trainingData, selectedProvider]);
+
+  // Handle provider change
+  const handleProviderChange = (e) => {
+    setSelectedProvider(e.target.value);
   };
-  
+
   return (
-    <div className="coach-panel">
-      <h3>AI Smart Coach</h3>
+    <div className="smart-coach">
+      <div className="coach-header">
+        <h2>AI Smart Coach</h2>
+        <div className="provider-selector">
+          <label htmlFor="ai-provider">AI Provider:</label>
+          <select 
+            id="ai-provider" 
+            value={selectedProvider} 
+            onChange={handleProviderChange}
+            disabled={loading}
+          >
+            <option value={AI_PROVIDERS.GEMINI}>Google Gemini</option>
+            <option value={AI_PROVIDERS.OPENAI}>OpenAI</option>
+            <option value={AI_PROVIDERS.HUGGINGFACE}>Hugging Face</option>
+          </select>
+        </div>
+      </div>
       
-      {loading ? (
-        <div className="loading-indicator">
-          <p>Analyzing your training data...</p>
-          <div className="spinner"></div>
-        </div>
-      ) : error ? (
-        <div className="error-message">
-          <p>{error}</p>
-          <button onClick={handleRefresh} className="refresh-button">
-            Try Again
-          </button>
-        </div>
-      ) : !advice ? (
-        <div className="no-data">
-          <p>Upload some workouts to get personalized coaching advice!</p>
-        </div>
-      ) : (
-        <div className="advice-container">
-          <div className="advice-content">
-            {advice.split('\n').map((paragraph, index) => (
-              paragraph.trim() ? (
-                <p key={index}>{paragraph}</p>
-              ) : (
-                <br key={index} />
-              )
-            ))}
+      <div className="coach-content">
+        {loading ? (
+          <div className="loading-indicator">
+            <p>Analyzing your training data...</p>
+            <div className="spinner"></div>
           </div>
-          
-          {lastUpdated && (
-            <div className="last-updated">
-              <p>Last updated: {lastUpdated.toLocaleString()}</p>
-              <button onClick={handleRefresh} className="refresh-button">
-                Refresh Advice
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+        ) : error ? (
+          <div className="error-message">
+            <p>{error}</p>
+            <button onClick={fetchCoachingAdvice}>Try Again</button>
+          </div>
+        ) : advice ? (
+          <div className="advice-container">
+            <div className="advice-text">{advice}</div>
+            <button onClick={fetchCoachingAdvice} className="refresh-button">
+              Get Fresh Advice
+            </button>
+          </div>
+        ) : (
+          <div className="no-data-message">
+            <p>Upload training data to get personalized coaching advice.</p>
+          </div>
+        )}
+      </div>
+      
+      <div className="coach-footer">
+        <p className="provider-info">
+          Powered by {selectedProvider === AI_PROVIDERS.OPENAI ? 'OpenAI' : 
+                      selectedProvider === AI_PROVIDERS.GEMINI ? 'Google Gemini' : 
+                      'Hugging Face'}
+        </p>
+      </div>
     </div>
   );
 };
