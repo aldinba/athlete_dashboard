@@ -1,356 +1,190 @@
-# Training Metrics Calculation
-
-This document outlines the implementation of training metrics calculations for the Athlete Dashboard application.
-
-## Overview
-
-Training metrics are essential for athletes to understand their training load, recovery status, and fitness progression. The Athlete Dashboard will implement several key metrics:
-
-1. **TRIMP (Training Impulse)** - A measure of training load for a single workout
-2. **ATL (Acute Training Load)** - Short-term training load (fatigue)
-3. **CTL (Chronic Training Load)** - Long-term training load (fitness)
-4. **TSB (Training Stress Balance)** - Balance between fitness and fatigue (form)
-5. **VO2max estimate** - Estimated maximal oxygen uptake
-6. **HR Drift** - Heart rate increase over time at constant intensity
-
-## Implementation Details
-
-### TRIMP (Training Impulse)
-
-TRIMP quantifies the training load of a single workout based on duration and intensity.
-
-**Banister's TRIMP Formula:**
-```
-TRIMP = duration (minutes) × intensity factor
-```
-
-Where intensity factor is calculated as:
-```
-intensity factor = HRR × 0.64 × e^(1.92 × HRR)
-```
-
-And HRR (Heart Rate Reserve) is:
-```
-HRR = (avg_hr - resting_hr) / (max_hr - resting_hr)
-```
-
-### ATL (Acute Training Load)
-
-ATL represents short-term fatigue and is calculated as an exponentially weighted average of daily TRIMP values with a time constant of 7 days.
-
-**Formula:**
-```
-ATL_today = ATL_yesterday + (TRIMP_today - ATL_yesterday) / 7
-```
-
-### CTL (Chronic Training Load)
-
-CTL represents long-term fitness and is calculated as an exponentially weighted average of daily TRIMP values with a time constant of 42 days.
-
-**Formula:**
-```
-CTL_today = CTL_yesterday + (TRIMP_today - CTL_yesterday) / 42
-```
-
-### TSB (Training Stress Balance)
-
-TSB represents the balance between fitness and fatigue, often referred to as "form".
-
-**Formula:**
-```
-TSB = CTL - ATL
-```
-
-- Positive TSB: Fresh, well-recovered state
-- Negative TSB: Fatigued state
-- Very negative TSB: Risk of overtraining
-
-### VO2max Estimate
-
-VO2max is estimated using heart rate and pace data from workouts.
-
-**Simplified Firstbeat Method:**
-```
-VO2max ≈ 15 * (max speed in km/h) / (avg HR / max HR)
-```
-
-### HR Drift
-
-HR drift measures cardiovascular efficiency by comparing heart rate between the first and second half of a workout at similar intensities.
-
-**Formula:**
-```
-HR Drift = ((avg_hr_second_half - avg_hr_first_half) / avg_hr_first_half) * 100
-```
-
-## Implementation Plan
-
-### 1. Training Metrics Service
-
-Create a service that:
-- Calculates TRIMP for individual workouts
-- Updates ATL, CTL, and TSB daily
-- Stores calculated metrics in the database
-
-```javascript
-// trainingMetricsService.js
-import { supabase } from '../lib/supabaseClient';
+/**
+ * Training Metrics Service
+ * 
+ * This service provides functions for calculating various training metrics
+ * including TRIMP, ATL, CTL, TSB, and more.
+ */
 
 /**
- * Calculate TRIMP for a workout
- * @param {Object} workout - Workout data
- * @param {Object} userProfile - User profile with max_hr and resting_hr
+ * Calculate Training Impulse (TRIMP) using Banister's formula
+ * TRIMP = duration (minutes) × intensity factor
+ * where intensity factor = HRreserve × 0.64 × e^(1.92 × HRreserve)
+ * and HRreserve = (avg HR - resting HR) / (max HR - resting HR)
+ * 
+ * @param {number} duration - Duration in minutes
+ * @param {number} avgHR - Average heart rate
+ * @param {number} maxHR - Maximum heart rate
+ * @param {number} restingHR - Resting heart rate
  * @returns {number} - TRIMP value
  */
-export const calculateTRIMP = (workout, userProfile) => {
-  const { duration, avg_hr } = workout;
-  const { max_hr, resting_hr } = userProfile;
+export function calculateTRIMP(duration, avgHR, maxHR, restingHR) {
+  // Default values if not provided
+  maxHR = maxHR || 185;
+  restingHR = restingHR || 60;
   
-  // Default values if not available
-  const maxHR = max_hr || 220 - 30; // Default formula: 220 - age (assuming 30)
-  const restingHR = resting_hr || 60;
+  // Calculate heart rate reserve
+  const hrReserve = (avgHR - restingHR) / (maxHR - restingHR);
+  
+  // Calculate intensity factor using Banister's formula
+  const intensityFactor = hrReserve * 0.64 * Math.exp(1.92 * hrReserve);
   
   // Calculate TRIMP
-  if (avg_hr > 0 && duration > 0) {
-    const durationMinutes = duration / 60;
-    const hrReserve = (avg_hr - restingHR) / (maxHR - restingHR);
-    
-    if (hrReserve > 0) {
-      // Banister's formula
-      const intensityFactor = hrReserve * 0.64 * Math.exp(1.92 * hrReserve);
-      return durationMinutes * intensityFactor;
-    }
-  }
+  const trimp = duration * intensityFactor;
   
-  return 0;
-};
+  return Math.round(trimp * 100) / 100; // Round to 2 decimal places
+}
 
 /**
- * Calculate ATL (Acute Training Load)
+ * Calculate Acute Training Load (ATL)
+ * ATL = ATL_yesterday + (TRIMP_today - ATL_yesterday) / 7
+ * 
  * @param {number} previousATL - Previous day's ATL
  * @param {number} todayTRIMP - Today's TRIMP value
  * @returns {number} - New ATL value
  */
-export const calculateATL = (previousATL, todayTRIMP) => {
-  return previousATL + (todayTRIMP - previousATL) / 7;
-};
+export function calculateATL(previousATL, todayTRIMP) {
+  const timeConstant = 7; // 7-day time constant
+  const newATL = previousATL + (todayTRIMP - previousATL) / timeConstant;
+  return Math.round(newATL * 100) / 100; // Round to 2 decimal places
+}
 
 /**
- * Calculate CTL (Chronic Training Load)
+ * Calculate Chronic Training Load (CTL)
+ * CTL = CTL_yesterday + (TRIMP_today - CTL_yesterday) / 42
+ * 
  * @param {number} previousCTL - Previous day's CTL
  * @param {number} todayTRIMP - Today's TRIMP value
  * @returns {number} - New CTL value
  */
-export const calculateCTL = (previousCTL, todayTRIMP) => {
-  return previousCTL + (todayTRIMP - previousCTL) / 42;
-};
+export function calculateCTL(previousCTL, todayTRIMP) {
+  const timeConstant = 42; // 42-day time constant
+  const newCTL = previousCTL + (todayTRIMP - previousCTL) / timeConstant;
+  return Math.round(newCTL * 100) / 100; // Round to 2 decimal places
+}
 
 /**
- * Calculate TSB (Training Stress Balance)
+ * Calculate Training Stress Balance (TSB)
+ * TSB = CTL - ATL
+ * 
  * @param {number} ctl - Chronic Training Load
  * @param {number} atl - Acute Training Load
- * @returns {number} - Training Stress Balance
+ * @returns {number} - TSB value
  */
-export const calculateTSB = (ctl, atl) => {
-  return ctl - atl;
-};
+export function calculateTSB(ctl, atl) {
+  const tsb = ctl - atl;
+  return Math.round(tsb * 100) / 100; // Round to 2 decimal places
+}
 
 /**
- * Update training load metrics for a user
- * @param {string} userId - User ID
- * @returns {Promise} - Promise resolving to updated training load data
+ * Calculate Heart Rate Drift
+ * HR Drift = (avg HR second half - avg HR first half) / avg HR first half * 100
+ * 
+ * @param {number[]} heartRates - Array of heart rate values
+ * @returns {number} - HR Drift as a percentage
  */
-export const updateTrainingLoad = async (userId) => {
-  try {
-    // Get user profile
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('max_hr, resting_hr')
-      .eq('id', userId)
-      .single();
-    
-    if (profileError) {
-      throw profileError;
-    }
-    
-    // Get latest training load record
-    const { data: latestTrainingLoad, error: loadError } = await supabase
-      .from('training_load')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: false })
-      .limit(1)
-      .single();
-    
-    // Get today's date
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // Initialize previous values
-    let previousATL = latestTrainingLoad?.atl || 0;
-    let previousCTL = latestTrainingLoad?.ctl || 0;
-    let lastDate = latestTrainingLoad ? new Date(latestTrainingLoad.date) : new Date(today);
-    lastDate.setHours(0, 0, 0, 0);
-    
-    // If latest record is from today, we'll update it
-    // Otherwise, we need to fill in missing days and create a new record
-    const daysDiff = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
-    
-    if (daysDiff > 0) {
-      // Fill in missing days with decay
-      for (let i = 1; i <= daysDiff; i++) {
-        const currentDate = new Date(lastDate);
-        currentDate.setDate(currentDate.getDate() + i);
-        
-        // For missing days, TRIMP is 0 (no workout)
-        previousATL = calculateATL(previousATL, 0);
-        previousCTL = calculateCTL(previousCTL, 0);
-        const tsb = calculateTSB(previousCTL, previousATL);
-        
-        // Only insert the last missing day or today
-        if (i === daysDiff) {
-          // Get today's workouts
-          const { data: todayWorkouts, error: workoutsError } = await supabase
-            .from('workouts')
-            .select('id, duration, distance, avg_hr')
-            .eq('user_id', userId)
-            .gte('workout_date', currentDate.toISOString().split('T')[0])
-            .lt(new Date(currentDate.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-          
-          if (workoutsError) {
-            throw workoutsError;
-          }
-          
-          // Calculate today's TRIMP from all workouts
-          let todayTRIMP = 0;
-          let todayDistance = 0;
-          let todayDuration = 0;
-          
-          for (const workout of todayWorkouts || []) {
-            todayTRIMP += calculateTRIMP(workout, profile);
-            todayDistance += workout.distance || 0;
-            todayDuration += workout.duration || 0;
-          }
-          
-          // Update with today's workout data
-          previousATL = calculateATL(previousATL, todayTRIMP);
-          previousCTL = calculateCTL(previousCTL, todayTRIMP);
-          const updatedTSB = calculateTSB(previousCTL, previousATL);
-          
-          // Insert or update training load record
-          const { data, error } = await supabase
-            .from('training_load')
-            .upsert({
-              user_id: userId,
-              date: currentDate.toISOString().split('T')[0],
-              atl: previousATL,
-              ctl: previousCTL,
-              tsb: updatedTSB,
-              weekly_distance: calculateWeeklyMetric(userId, 'distance', currentDate),
-              weekly_duration: calculateWeeklyMetric(userId, 'duration', currentDate)
-            })
-            .select();
-          
-          if (error) {
-            throw error;
-          }
-          
-          return data;
-        }
-      }
-    } else if (daysDiff === 0 && latestTrainingLoad) {
-      // Update today's record with latest workout data
-      
-      // Get today's workouts
-      const { data: todayWorkouts, error: workoutsError } = await supabase
-        .from('workouts')
-        .select('id, duration, distance, avg_hr')
-        .eq('user_id', userId)
-        .gte('workout_date', today.toISOString().split('T')[0])
-        .lt(new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-      
-      if (workoutsError) {
-        throw workoutsError;
-      }
-      
-      // Calculate today's TRIMP from all workouts
-      let todayTRIMP = 0;
-      let todayDistance = 0;
-      let todayDuration = 0;
-      
-      for (const workout of todayWorkouts || []) {
-        todayTRIMP += calculateTRIMP(workout, profile);
-        todayDistance += workout.distance || 0;
-        todayDuration += workout.duration || 0;
-      }
-      
-      // Update with today's workout data
-      const updatedATL = calculateATL(previousATL, todayTRIMP);
-      const updatedCTL = calculateCTL(previousCTL, todayTRIMP);
-      const updatedTSB = calculateTSB(updatedCTL, updatedATL);
-      
-      // Update training load record
-      const { data, error } = await supabase
-        .from('training_load')
-        .update({
-          atl: updatedATL,
-          ctl: updatedCTL,
-          tsb: updatedTSB,
-          weekly_distance: await calculateWeeklyMetric(userId, 'distance', today),
-          weekly_duration: await calculateWeeklyMetric(userId, 'duration', today)
-        })
-        .eq('id', latestTrainingLoad.id)
-        .select();
-      
-      if (error) {
-        throw error;
-      }
-      
-      return data;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error updating training load:', error);
-    throw error;
-  }
-};
-
-/**
- * Calculate weekly metric (distance or duration)
- * @param {string} userId - User ID
- * @param {string} metric - Metric to calculate ('distance' or 'duration')
- * @param {Date} date - Date to calculate for
- * @returns {Promise<number>} - Weekly metric value
- */
-export const calculateWeeklyMetric = async (userId, metric, date) => {
-  // Calculate start of week (last 7 days)
-  const startDate = new Date(date);
-  startDate.setDate(startDate.getDate() - 6);
-  startDate.setHours(0, 0, 0, 0);
-  
-  // Get workouts for the week
-  const { data: workouts, error } = await supabase
-    .from('workouts')
-    .select(`id, ${metric}`)
-    .eq('user_id', userId)
-    .gte('workout_date', startDate.toISOString())
-    .lte('workout_date', date.toISOString());
-  
-  if (error) {
-    console.error(`Error calculating weekly ${metric}:`, error);
+export function calculateHRDrift(heartRates) {
+  if (!heartRates || heartRates.length < 2) {
     return 0;
   }
   
-  // Sum the metric
-  return workouts.reduce((sum, workout) => sum + (workout[metric] || 0), 0);
-};
+  const midpoint = Math.floor(heartRates.length / 2);
+  const firstHalf = heartRates.slice(0, midpoint);
+  const secondHalf = heartRates.slice(midpoint);
+  
+  const avgFirstHalf = firstHalf.reduce((sum, hr) => sum + hr, 0) / firstHalf.length;
+  const avgSecondHalf = secondHalf.reduce((sum, hr) => sum + hr, 0) / secondHalf.length;
+  
+  const hrDrift = (avgSecondHalf - avgFirstHalf) / avgFirstHalf * 100;
+  
+  return Math.round(hrDrift * 100) / 100; // Round to 2 decimal places
+}
+
+/**
+ * Estimate VO2max using heart rate and pace data
+ * This is a simplified implementation of the Daniels-Gilbert formula
+ * 
+ * @param {number} avgHR - Average heart rate
+ * @param {number} avgPace - Average pace in seconds per kilometer
+ * @param {number} maxHR - Maximum heart rate
+ * @param {number} restingHR - Resting heart rate
+ * @returns {number} - Estimated VO2max in ml/kg/min
+ */
+export function estimateVO2max(avgHR, avgPace, maxHR, restingHR) {
+  // Default values if not provided
+  maxHR = maxHR || 185;
+  restingHR = restingHR || 60;
+  
+  // Convert pace to meters per second
+  const speedMPS = 1000 / avgPace;
+  
+  // Calculate heart rate reserve percentage
+  const hrReserve = (avgHR - restingHR) / (maxHR - restingHR);
+  
+  // Simplified VO2max estimation
+  // This is a basic approximation - more accurate models exist
+  const vo2max = (speedMPS * 3.5) / hrReserve;
+  
+  return Math.round(vo2max * 10) / 10; // Round to 1 decimal place
+}
+
+/**
+ * Calculate time spent in each heart rate zone
+ * 
+ * @param {number[]} heartRates - Array of heart rate values
+ * @param {number} maxHR - Maximum heart rate
+ * @returns {Object} - Object with time spent in each zone (in seconds)
+ */
+export function calculateHRZones(heartRates, maxHR) {
+  // Default max HR if not provided
+  maxHR = maxHR || 185;
+  
+  // Define HR zones as percentages of max HR
+  const zoneThresholds = [
+    0.6,  // Zone 1: 60-70% of max HR
+    0.7,  // Zone 2: 70-80% of max HR
+    0.8,  // Zone 3: 80-90% of max HR
+    0.9,  // Zone 4: 90-100% of max HR
+    1.0   // Zone 5: 100%+ of max HR (for completeness)
+  ];
+  
+  // Initialize zone counters
+  const zones = {
+    zone1: 0,
+    zone2: 0,
+    zone3: 0,
+    zone4: 0,
+    zone5: 0
+  };
+  
+  // Count time spent in each zone
+  heartRates.forEach(hr => {
+    const hrPercentage = hr / maxHR;
+    
+    if (hrPercentage < zoneThresholds[0]) {
+      // Below Zone 1
+      return;
+    } else if (hrPercentage < zoneThresholds[1]) {
+      zones.zone1++;
+    } else if (hrPercentage < zoneThresholds[2]) {
+      zones.zone2++;
+    } else if (hrPercentage < zoneThresholds[3]) {
+      zones.zone3++;
+    } else if (hrPercentage < zoneThresholds[4]) {
+      zones.zone4++;
+    } else {
+      zones.zone5++;
+    }
+  });
+  
+  return zones;
+}
 
 export default {
   calculateTRIMP,
   calculateATL,
   calculateCTL,
   calculateTSB,
-  updateTrainingLoad,
-  calculateWeeklyMetric
+  calculateHRDrift,
+  estimateVO2max,
+  calculateHRZones
 };

@@ -1,12 +1,13 @@
 {
-    "framework": "nextjs",
-    "buildCommand": "npm run build",
-    "outputDirectory": ".next",
-    "installCommand": "npm install",
-    "env": {
-      "NEXT_PUBLIC_SUPABASE_URL": "https://pacofatlynxfpbywfgtu.supabase.co",
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhY29mYXRseW54ZnBieXdmZ3R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI4NjA4NjgsImV4cCI6MjA1ODQzNjg2OH0.4jt1jDYZoZOfAYOoaF9rIY629p_t9XIlc2eYhmRa3Og",
-      "GEMINI_API_KEY": "AIzaSyAaZkcg5JPy35Me6x2l5IDiX9wKsDrYzr8",
-      "HUGGINGFACE_API_KEY": "your-huggingface-api-key"
-    }
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": "your-supabase-url",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "your-supabase-anon-key",
+    "OPENAI_API_KEY": "your-openai-api-key",
+    "GEMINI_API_KEY": "your-gemini-api-key",
+    "HUGGINGFACE_API_KEY": "your-huggingface-api-key"
   }
+}
