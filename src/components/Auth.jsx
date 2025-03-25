@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { signIn, signUp, getCurrentUser } from '../services/authService';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/router';
 import './Auth.css';
 
 const Auth = () => {
@@ -9,19 +9,19 @@ const Auth = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   useEffect(() => {
     // Check if user is already logged in
     const checkUser = async () => {
       const { user } = await getCurrentUser();
       if (user) {
-        navigate('/dashboard');
+        router.push('/dashboard');
       }
     };
     
     checkUser();
-  }, [navigate]);
+  }, [router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -40,7 +40,7 @@ const Auth = () => {
       if (result.error) {
         setError(result.error.message);
       } else {
-        navigate('/dashboard');
+        router.push('/dashboard');
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
