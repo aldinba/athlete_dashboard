@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { signIn, signUp, getCurrentUser } from '../services/authService';
 import { useRouter } from 'next/router';
-import './Auth.css';
 
 const Auth = () => {
   const [email, setEmail] = useState('');

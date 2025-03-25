@@ -8,7 +8,6 @@ import FileUpload from './FileUpload';
 import WorkoutList from './WorkoutList';
 import WorkoutDetail from './WorkoutDetail';
 import SmartCoach from './SmartCoach';
-import './Dashboard.css';
 
 /**
  * Main Dashboard component that integrates all the dashboard elements

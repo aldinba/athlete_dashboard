@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { AI_PROVIDERS, getCoachingAdvice } from '../services/aiProviderService';
-import './SmartCoach.css';
 
 /**
  * SmartCoach component that provides AI-powered coaching advice

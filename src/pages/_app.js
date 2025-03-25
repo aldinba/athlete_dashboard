@@ -1,4 +1,7 @@
 import '../styles/globals.css'
+import './../components/Auth.css';
+import './../components/Dashboard.css';
+import './../components/SmartCoach.css';
 import { useState } from 'react'
 import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs'
 import { SessionContextProvider } from '@supabase/auth-helpers-react'
