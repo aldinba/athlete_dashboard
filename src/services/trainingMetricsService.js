@@ -4,6 +4,7 @@
  * This service provides functions for calculating various training metrics
  * including TRIMP, ATL, CTL, TSB, and more.
  */
+import { supabase } from '../lib/supabaseClient';
 
 /**
  * Calculate Training Impulse (TRIMP) using Banister's formula
@@ -133,7 +134,7 @@ export function estimateVO2max(avgHR, avgPace, maxHR, restingHR) {
  * @param {number[]} heartRates - Array of heart rate values
  * @param {number} maxHR - Maximum heart rate
  * @returns {Object} - Object with time spent in each zone (in seconds)
- */
+ *
 export function calculateHRZones(heartRates, maxHR) {
   // Default max HR if not provided
   maxHR = maxHR || 185;
@@ -178,6 +179,79 @@ export function calculateHRZones(heartRates, maxHR) {
   
   return zones;
 }
+*/
+
+/**
+ * Update training load metrics (ATL, CTL, TSB) for a user
+ * @param {string} userId - User ID
+ */
+async function updateTrainingLoad(userId) {
+  try {
+    // Get user's workouts
+    const { data: workouts, error: workoutsError } = await supabase
+      .from('workouts')
+      .select('id, workout_date, duration, avg_hr, max_hr')
+      .eq('user_id', userId)
+      .order('workout_date', { ascending: true });
+
+    if (workoutsError) {
+      throw workoutsError;
+    }
+
+    // Get user's profile
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('max_hr, resting_hr')
+      .eq('id', userId)
+      .single();
+
+    if (profileError) {
+      throw profileError;
+    }
+
+    const maxHR = profile?.max_hr || 185;
+    const restingHR = profile?.resting_hr || 60;
+
+    let atl = 0;
+    let ctl = 0;
+
+    // Iterate over workouts and calculate TRIMP, ATL, CTL, TSB
+    for (const workout of workouts) {
+      // Calculate TRIMP
+      const trimp = calculateTRIMP(workout.duration / 60, workout.avg_hr, maxHR, restingHR);
+
+      // Calculate ATL
+      atl = calculateATL(atl, trimp);
+
+      // Calculate CTL
+      ctl = calculateCTL(ctl, trimp);
+
+      // Calculate TSB
+      const tsb = calculateTSB(ctl, atl);
+
+      // Get workout date
+      const workoutDate = workout.workout_date;
+
+      // Store training load metrics in the database
+      const { error: trainingLoadError } = await supabase
+        .from('training_load')
+        .upsert({
+          user_id: userId,
+          date: workoutDate,
+          atl: atl,
+          ctl: ctl,
+          tsb: tsb,
+        }, { onConflict: ['user_id', 'date'] });
+
+      if (trainingLoadError) {
+        throw trainingLoadError;
+      }
+    }
+  } catch (error) {
+    console.error('Error updating training load:', error);
+    throw error;
+  }
+}
 
 export default {
   calculateTRIMP,
@@ -186,5 +260,5 @@ export default {
   calculateTSB,
   calculateHRDrift,
   estimateVO2max,
-  calculateHRZones
+  updateTrainingLoad
 };
