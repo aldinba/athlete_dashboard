@@ -6,13 +6,30 @@ import { AlertTriangle } from "lucide-react"
 
 export function EnvironmentVariablesCheck() {
   const [missingVars, setMissingVars] = useState<string[]>([])
+  const [checked, setChecked] = useState(false)
 
   useEffect(() => {
-    const requiredVars = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"]
+    // Only run this check once
+    if (!checked) {
+      try {
+        const requiredVars = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"]
 
-    const missing = requiredVars.filter((varName) => !process.env[varName])
-    setMissingVars(missing)
-  }, [])
+        // Safely check if environment variables exist
+        const missing = requiredVars.filter((varName) => {
+          const value = process.env[varName as keyof typeof process.env]
+          return !value
+        })
+
+        setMissingVars(missing)
+      } catch (error) {
+        console.error("Error checking environment variables:", error)
+        // If there's an error, assume all variables are missing
+        setMissingVars(["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"])
+      }
+
+      setChecked(true)
+    }
+  }, [checked])
 
   if (missingVars.length === 0) {
     return null

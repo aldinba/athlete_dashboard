@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
@@ -33,43 +33,45 @@ export function WorkoutSidebar({ selectedWorkoutId, onSelectWorkout }: WorkoutSi
   const { toast } = useToast()
   const supabase = createClient()
 
-  useEffect(() => {
-    async function fetchWorkouts() {
-      setIsLoading(true)
-      setError(null)
+  // Use useCallback to prevent the function from being recreated on every render
+  const fetchWorkouts = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
 
-      try {
-        // Check if Supabase is properly initialized
-        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-          throw new Error("Supabase environment variables are missing. Please check your configuration.")
-        }
-
-        const { data, error } = await supabase.from("workouts").select("*").order("date", { ascending: false })
-
-        if (error) throw error
-
-        if (data) {
-          setWorkouts(data)
-          // Select the most recent workout by default if none is selected
-          if (!selectedWorkoutId && data.length > 0) {
-            onSelectWorkout(data[0].id)
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching workouts:", err)
-        setError(err instanceof Error ? err.message : "Failed to fetch workouts")
-        toast({
-          title: "Error fetching workouts",
-          description: "Please check your connection and try again",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
+    try {
+      // Check if Supabase is properly initialized
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        throw new Error("Supabase environment variables are missing. Please check your configuration.")
       }
-    }
 
-    fetchWorkouts()
+      const { data, error } = await supabase.from("workouts").select("*").order("date", { ascending: false })
+
+      if (error) throw error
+
+      if (data) {
+        setWorkouts(data)
+        // Select the most recent workout by default if none is selected
+        if (!selectedWorkoutId && data.length > 0) {
+          onSelectWorkout(data[0].id)
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching workouts:", err)
+      setError(err instanceof Error ? err.message : "Failed to fetch workouts")
+      toast({
+        title: "Error fetching workouts",
+        description: "Please check your connection and try again",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }, [selectedWorkoutId, onSelectWorkout, toast, supabase])
+
+  // Use useEffect with proper dependencies
+  useEffect(() => {
+    fetchWorkouts()
+  }, [fetchWorkouts])
 
   function formatDistance(distance: number): string {
     return (distance / 1000).toFixed(2) + " km"
@@ -152,6 +154,8 @@ export function WorkoutSidebar({ selectedWorkoutId, onSelectWorkout }: WorkoutSi
             title: "Workout uploaded",
             description: "Your workout has been processed successfully",
           })
+          // Refresh the workout list after a successful upload
+          fetchWorkouts()
         }}
       />
     </div>
