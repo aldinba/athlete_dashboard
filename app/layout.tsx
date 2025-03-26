@@ -1,26 +1,30 @@
 import type React from "react"
-import type { Metadata } from "next"
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
+import { cn } from "@/lib/utils"
+import "@/app/globals.css"
 import { Inter } from "next/font/google"
-import "./globals.css"
-import { Providers } from "./providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export const metadata: Metadata = {
-  title: "Runner Dashboard",
-  description: "Track and analyze your running workouts",
+export const metadata = {
+  title: "Athlete Dashboard",
+  description: "Training analytics and AI coaching for endurance athletes",
     generator: 'v0.dev'
 }
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <Providers>{children}</Providers>
+    <html lang="en" suppressHydrationWarning>
+      <body className={cn("min-h-screen bg-background font-sans antialiased", inter.className)}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   )
