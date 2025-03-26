@@ -2,3 +2,4 @@ node_modules
 .next
 .next/cache
 .next/server/components
+.vercel
